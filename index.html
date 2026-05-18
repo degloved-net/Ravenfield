@@ -1,206 +1,391 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Ravenfield</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-    <style>
-      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #231F20; overflow: hidden; }
-      #unity-container { position: fixed; inset: 0; width: 100vw; height: 100vh; }
-      #unity-canvas { display: block; width: 100vw !important; height: 100vh !important; background: #231F20; outline: none; }
-      #unity-loading-bar {
-        position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-        display: none;
-      }
-      #unity-footer { display: none !important; }
-      #unity-warning { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 10; }
-    </style>
-  </head>
-  <body>
-    <div id="unity-container">
-      <canvas id="unity-canvas" tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"></div>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Ravenfield</title>
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <link rel="stylesheet" href="TemplateData/style.css">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+      font-family: Arial, sans-serif;
+    }
+
+    #unity-container {
+      position: fixed;
+      inset: 0;
+    }
+
+    #unity-canvas {
+      width: 100vw !important;
+      height: 100vh !important;
+      display: block;
+      background: #111;
+      outline: none;
+    }
+
+    #rf-loader {
+      position: fixed;
+      inset: 0;
+      background: #111;
+      color: #dcdcdc;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      transition: opacity .4s ease;
+    }
+
+    #rf-loader.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #rf-card {
+      width: 420px;
+      max-width: calc(100vw - 40px);
+      background: #1a1a1a;
+      border: none;
+      padding: 22px;
+      box-sizing: border-box;
+    }
+
+    #rf-title {
+      font-size: 28px;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 4px;
+      letter-spacing: -1px;
+    }
+
+    #rf-subtitle {
+      font-size: 12px;
+      color: #7d7d7d;
+      margin-bottom: 18px;
+    }
+
+    #rf-loader img {
+      width: 100%;
+      max-width: 220px;
+      display: block;
+      margin: 0 auto 18px auto;
+      image-rendering: pixelated;
+    }
+
+    #rf-bar-wrap {
+      width: 100%;
+      height: 18px;
+      background: #0e0e0e;
+      border: none;
+      overflow: hidden;
+    }
+
+    #rf-bar {
+      width: 0%;
+      height: 100%;
+      background: #d9d9d9;
+      transition: width .2s linear;
+    }
+
+    #rf-status {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #cfcfcf;
+      font-variant-numeric: tabular-nums;
+    }
+
+    #rf-note {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #777;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+
+    #unity-footer,
+    #unity-loading-bar {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+<div id="rf-loader">
+  <div id="rf-card">
+    <div id="rf-title">ravenfield</div>
+    <div id="rf-subtitle">browser port</div>
+    <img src="img.png" alt="" onerror="this.style.display='none'">
+    <div id="rf-bar-wrap">
+      <div id="rf-bar"></div>
     </div>
-    <script>
-      (function () {
-        var DATA_MARKER = "Build/WebGL.data";
-        var PART_COUNT = 23;
-        var PART_PREFIX = "Build/WebGL.data.part.";
+    <div id="rf-status">starting</div>
+    <div id="rf-note">smaller maps run way better btw</div>
+  </div>
+</div>
+<div id="unity-container">
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="unity-loading-bar">
+    <div id="unity-logo"></div>
+    <div id="unity-progress-bar-empty">
+      <div id="unity-progress-bar-full"></div>
+    </div>
+  </div>
+  <div id="unity-warning"></div>
+</div>
+<script>
+  (function () {
+    var DATA_MARKER = "Build/WebGL.data";
+    var PART_COUNT = 23;
+    var PART_PREFIX = "Build/WebGL.data.part.";
 
-        function fetchAllParts(baseUrl) {
-          var origin = baseUrl.substring(0, baseUrl.lastIndexOf("Build/"));
-          var urls = [];
-          for (var i = 0; i < PART_COUNT; i++) {
-            urls.push(origin + PART_PREFIX + String(i).padStart(3, "0"));
-          }
-          return Promise.all(urls.map(function (u) {
-            return fetch(u).then(function (r) {
-              if (!r.ok) throw new Error("Failed to fetch " + u + ": " + r.status);
-              return r.arrayBuffer();
-            });
-          })).then(function (buffers) {
-            var total = 0;
-            buffers.forEach(function (b) { total += b.byteLength; });
-            var out = new Uint8Array(total);
-            var offset = 0;
-            buffers.forEach(function (b) {
-              out.set(new Uint8Array(b), offset);
-              offset += b.byteLength;
-            });
-            return out.buffer;
-          });
-        }
-
-        function isDataUrl(url) {
-          if (!url) return false;
-          return url.indexOf(DATA_MARKER) !== -1 && url.indexOf(".part.") === -1;
-        }
-
-        var origFetch = window.fetch ? window.fetch.bind(window) : null;
-        if (origFetch) {
-          window.fetch = function (input, init) {
-            var url = (typeof input === "string") ? input : (input && input.url) || "";
-            if (!isDataUrl(url)) return origFetch(input, init);
-            return fetchAllParts(url).then(function (buf) {
-              return new Response(buf, {
-                status: 200,
-                headers: { "Content-Type": "application/octet-stream", "Content-Length": String(buf.byteLength) }
-              });
-            });
-          };
-        }
-
-        var XHR = window.XMLHttpRequest;
-        var origOpen = XHR.prototype.open;
-        var origSend = XHR.prototype.send;
-        var origSetRH = XHR.prototype.setRequestHeader;
-        XHR.prototype.open = function (method, url) {
-          this.__url = url;
-          this.__method = method;
-          this.__intercept = (method.toUpperCase() === "GET") && isDataUrl(url);
-          if (this.__intercept) {
-            this.__listeners = { load: [], loadend: [], progress: [], error: [], abort: [], readystatechange: [] };
-          }
-          return origOpen.apply(this, arguments);
-        };
-        XHR.prototype.setRequestHeader = function () {
-          if (this.__intercept) return;
-          return origSetRH.apply(this, arguments);
-        };
-        var addEL = XHR.prototype.addEventListener;
-        XHR.prototype.addEventListener = function (type, fn) {
-          if (this.__intercept && this.__listeners[type]) {
-            this.__listeners[type].push(fn);
-            return;
-          }
-          return addEL.apply(this, arguments);
-        };
-        XHR.prototype.send = function () {
-          if (!this.__intercept) return origSend.apply(this, arguments);
-          var xhr = this;
-          var fire = function (type, ev) {
-            ev = ev || { type: type, target: xhr, currentTarget: xhr };
-            var arr = (xhr.__listeners && xhr.__listeners[type]) || [];
-            arr.forEach(function (fn) { try { fn.call(xhr, ev); } catch (e) { console.error(e); } });
-            var on = xhr["on" + type];
-            if (typeof on === "function") { try { on.call(xhr, ev); } catch (e) { console.error(e); } }
-          };
-          fetchAllParts(xhr.__url).then(function (buf) {
-            Object.defineProperty(xhr, "readyState", { value: 4, configurable: true });
-            Object.defineProperty(xhr, "status", { value: 200, configurable: true });
-            Object.defineProperty(xhr, "statusText", { value: "OK", configurable: true });
-            Object.defineProperty(xhr, "response", { value: buf, configurable: true });
-            Object.defineProperty(xhr, "responseURL", { value: xhr.__url, configurable: true });
-            try { Object.defineProperty(xhr, "responseType", { value: xhr.responseType || "arraybuffer", configurable: true }); } catch (e) {}
-            fire("readystatechange");
-            fire("progress", { type: "progress", target: xhr, currentTarget: xhr, lengthComputable: true, loaded: buf.byteLength, total: buf.byteLength });
-            fire("load");
-            fire("loadend");
-          }).catch(function (err) {
-            console.error("Split data load failed:", err);
-            Object.defineProperty(xhr, "readyState", { value: 4, configurable: true });
-            Object.defineProperty(xhr, "status", { value: 500, configurable: true });
-            fire("error");
-            fire("loadend");
-          });
-        };
-      })();
-
-      var canvas = document.querySelector("#unity-canvas");
-      var loadingBar = document.querySelector("#unity-loading-bar");
-      var progressBarFull = document.querySelector("#unity-progress-bar-full");
-      var warningBanner = document.querySelector("#unity-warning");
-
-      function unityShowBanner(msg, type) {
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px; color: #fff;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
+    function fetchAllParts(baseUrl) {
+      var origin = baseUrl.substring(0, baseUrl.lastIndexOf("Build/"));
+      var urls = [];
+      for (var i = 0; i < PART_COUNT; i++) {
+        urls.push(origin + PART_PREFIX + String(i).padStart(3, "0"));
       }
-
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/WebGL.loader.js";
-      var config = {
-        dataUrl: buildUrl + "/WebGL.data",
-        frameworkUrl: buildUrl + "/WebGL.framework.js",
-        codeUrl: buildUrl + "/WebGL.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "SteelRaven7",
-        productName: "RavenfieldSteam",
-        productVersion: "1.0",
-        showBanner: unityShowBanner,
+      var loadedPerPart = new Array(PART_COUNT).fill(0);
+      var totalPerPart = new Array(PART_COUNT).fill(0);
+      var reportProgress = function () {
+        var loaded = loadedPerPart.reduce(function (a, b) { return a + b; }, 0);
+        var total = totalPerPart.reduce(function (a, b) { return a + b; }, 0);
+        if (window.__rfReport) window.__rfReport(loaded, total, loadedPerPart, totalPerPart);
       };
+      return Promise.all(urls.map(function (u, idx) {
+        return fetch(u).then(function (r) {
+          if (!r.ok) throw new Error("Failed to fetch " + u + ": " + r.status);
+          var len = parseInt(r.headers.get("Content-Length") || "0", 10);
+          totalPerPart[idx] = len;
+          if (!r.body || !r.body.getReader) {
+            return r.arrayBuffer().then(function (buf) {
+              loadedPerPart[idx] = buf.byteLength;
+              if (!totalPerPart[idx]) totalPerPart[idx] = buf.byteLength;
+              reportProgress();
+              return buf;
+            });
+          }
+          var reader = r.body.getReader();
+          var chunks = [];
+          var received = 0;
+          return new Promise(function (resolve, reject) {
+            function pump() {
+              reader.read().then(function (res) {
+                if (res.done) {
+                  var merged = new Uint8Array(received);
+                  var off = 0;
+                  chunks.forEach(function (c) { merged.set(c, off); off += c.length; });
+                  resolve(merged.buffer);
+                  return;
+                }
+                chunks.push(res.value);
+                received += res.value.length;
+                loadedPerPart[idx] = received;
+                if (received > totalPerPart[idx]) totalPerPart[idx] = received;
+                reportProgress();
+                pump();
+              }).catch(reject);
+            }
+            pump();
+          });
+        });
+      })).then(function (buffers) {
+        var total = 0;
+        buffers.forEach(function (b) { total += b.byteLength; });
+        var out = new Uint8Array(total);
+        var offset = 0;
+        buffers.forEach(function (b) {
+          out.set(new Uint8Array(b), offset);
+          offset += b.byteLength;
+        });
+        return out.buffer;
+      });
+    }
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        config.devicePixelRatio = 1;
-        unityShowBanner('WebGL builds are not supported on mobile devices.');
-      }
+    function isDataUrl(url) {
+      if (!url) return false;
+      return url.indexOf(DATA_MARKER) !== -1 && url.indexOf(".part.") === -1;
+    }
 
-      function resize() {
-        var dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(window.innerWidth * dpr);
-        canvas.height = Math.floor(window.innerHeight * dpr);
-      }
-      resize();
-      window.addEventListener("resize", resize);
-      window.addEventListener("orientationchange", resize);
-
-      canvas.addEventListener("click", function () { canvas.focus(); });
-
-      loadingBar.style.display = "block";
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          progressBarFull.style.width = (100 * progress) + "%";
-        }).then((unityInstance) => {
-          loadingBar.style.display = "none";
-          window.unityInstance = unityInstance;
-        }).catch((message) => {
-          alert(message);
+    var origFetch = window.fetch ? window.fetch.bind(window) : null;
+    if (origFetch) {
+      window.fetch = function (input, init) {
+        var url = (typeof input === "string") ? input : (input && input.url) || "";
+        if (!isDataUrl(url)) return origFetch(input, init);
+        return fetchAllParts(url).then(function (buf) {
+          return new Response(buf, {
+            status: 200,
+            headers: { "Content-Type": "application/octet-stream", "Content-Length": String(buf.byteLength) }
+          });
         });
       };
-      document.body.appendChild(script);
-    </script>
-  </body>
+    }
+
+    var XHR = window.XMLHttpRequest;
+    var origOpen = XHR.prototype.open;
+    var origSend = XHR.prototype.send;
+    var origSetRH = XHR.prototype.setRequestHeader;
+    XHR.prototype.open = function (method, url) {
+      this.__url = url;
+      this.__method = method;
+      this.__intercept = (method.toUpperCase() === "GET") && isDataUrl(url);
+      if (this.__intercept) {
+        this.__listeners = { load: [], loadend: [], progress: [], error: [], abort: [], readystatechange: [] };
+      }
+      return origOpen.apply(this, arguments);
+    };
+    XHR.prototype.setRequestHeader = function () {
+      if (this.__intercept) return;
+      return origSetRH.apply(this, arguments);
+    };
+    var addEL = XHR.prototype.addEventListener;
+    XHR.prototype.addEventListener = function (type, fn) {
+      if (this.__intercept && this.__listeners[type]) {
+        this.__listeners[type].push(fn);
+        return;
+      }
+      return addEL.apply(this, arguments);
+    };
+    XHR.prototype.send = function () {
+      if (!this.__intercept) return origSend.apply(this, arguments);
+      var xhr = this;
+      var fire = function (type, ev) {
+        ev = ev || { type: type, target: xhr, currentTarget: xhr };
+        var arr = (xhr.__listeners && xhr.__listeners[type]) || [];
+        arr.forEach(function (fn) { try { fn.call(xhr, ev); } catch (e) { console.error(e); } });
+        var on = xhr["on" + type];
+        if (typeof on === "function") { try { on.call(xhr, ev); } catch (e) { console.error(e); } }
+      };
+      fetchAllParts(xhr.__url).then(function (buf) {
+        Object.defineProperty(xhr, "readyState", { value: 4, configurable: true });
+        Object.defineProperty(xhr, "status", { value: 200, configurable: true });
+        Object.defineProperty(xhr, "statusText", { value: "OK", configurable: true });
+        Object.defineProperty(xhr, "response", { value: buf, configurable: true });
+        Object.defineProperty(xhr, "responseURL", { value: xhr.__url, configurable: true });
+        try { Object.defineProperty(xhr, "responseType", { value: xhr.responseType || "arraybuffer", configurable: true }); } catch (e) {}
+        fire("readystatechange");
+        fire("progress", { type: "progress", target: xhr, currentTarget: xhr, lengthComputable: true, loaded: buf.byteLength, total: buf.byteLength });
+        fire("load");
+        fire("loadend");
+      }).catch(function (err) {
+        console.error("Split data load failed:", err);
+        Object.defineProperty(xhr, "readyState", { value: 4, configurable: true });
+        Object.defineProperty(xhr, "status", { value: 500, configurable: true });
+        fire("error");
+        fire("loadend");
+      });
+    };
+  })();
+
+  var canvas = document.querySelector("#unity-canvas");
+  var loadingBar = document.querySelector("#unity-loading-bar");
+  var progressBarFull = document.querySelector("#unity-progress-bar-full");
+  var warningBanner = document.querySelector("#unity-warning");
+
+  function unityShowBanner(msg, type) {
+    function updateBannerVisibility() {
+      warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+    }
+    var div = document.createElement('div');
+    div.innerHTML = msg;
+    warningBanner.appendChild(div);
+    if (type == 'error') div.style = 'background: red; padding: 10px; color: #fff;';
+    else {
+      if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+      setTimeout(function() {
+        warningBanner.removeChild(div);
+        updateBannerVisibility();
+      }, 5000);
+    }
+    updateBannerVisibility();
+  }
+
+  var buildUrl = "Build";
+  var loaderUrl = buildUrl + "/WebGL.loader.js";
+  var config = {
+    dataUrl: buildUrl + "/WebGL.data",
+    frameworkUrl: buildUrl + "/WebGL.framework.js",
+    codeUrl: buildUrl + "/WebGL.wasm",
+    streamingAssetsUrl: "StreamingAssets",
+    companyName: "SteelRaven7",
+    productName: "RavenfieldSteam",
+    productVersion: "1.0",
+    showBanner: unityShowBanner,
+  };
+
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    config.devicePixelRatio = 1;
+    unityShowBanner('WebGL builds are not supported on mobile devices.');
+  }
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", resize);
+
+  canvas.addEventListener("click", function () { canvas.focus(); });
+
+  var rfLoader = document.getElementById("rf-loader");
+  var rfBar = document.getElementById("rf-bar");
+  var rfStatus = document.getElementById("rf-status");
+  var rfNote = document.getElementById("rf-note");
+  var downloadDone = false;
+
+  function fmtMB(b) { return (b / 1048576).toFixed(1) + " MB"; }
+
+  window.__rfReport = function (loaded, total, perLoaded, perTotal) {
+    if (downloadDone) return;
+    var partsDone = perLoaded.filter(function (v, i) { return perTotal[i] > 0 && v >= perTotal[i]; }).length;
+    var frac;
+    if (total > 0) {
+      frac = loaded / total;
+    } else {
+      frac = partsDone / perLoaded.length;
+    }
+    var displayFrac = Math.min(0.9, frac * 0.9);
+    rfBar.style.width = (displayFrac * 100).toFixed(1) + "%";
+    rfStatus.textContent = "downloading " + fmtMB(loaded) + (total ? " / " + fmtMB(total) : "") + "  ·  " + (frac * 100).toFixed(0) + "%";
+    rfNote.textContent = partsDone + " / " + perLoaded.length + " chunks       -       smaller maps run way better btw";
+  };
+
+  function onDownloadComplete() {
+    downloadDone = true;
+    rfStatus.textContent = "starting engine";
+    rfNote.textContent = "unpacking stuff";
+  }
+
+  var script = document.createElement("script");
+  script.src = loaderUrl;
+  script.onload = function () {
+    createUnityInstance(canvas, config, function (progress) {
+      if (!downloadDone && progress > 0.01) onDownloadComplete();
+      var pct = 0.9 + Math.min(progress, 1) * 0.1;
+      rfBar.style.width = (pct * 100).toFixed(1) + "%";
+      progressBarFull.style.width = (100 * progress) + "%";
+    }).then(function (unityInstance) {
+      loadingBar.style.display = "none";
+      window.unityInstance = unityInstance;
+      rfBar.style.width = "100%";
+      rfStatus.textContent = "ready";
+      setTimeout(function () {
+        rfLoader.classList.add("hide");
+        setTimeout(function () { rfLoader.remove(); }, 500);
+      }, 250);
+    }).catch(function (message) {
+      rfStatus.textContent = "failed to load";
+      rfNote.textContent = String(message).slice(0, 200);
+    });
+  };
+  document.body.appendChild(script);
+</script>
+</body>
 </html>
