@@ -140,9 +140,9 @@
 </div>
 <script>
   (function () {
-    var DATA_MARKER = "Build/WebGL.data";
-    var PART_COUNT = 23;
-    var PART_PREFIX = "Build/WebGL.data.part.";
+    var DATA_MARKER = "Build/81b9b315f9a925fd39279df8af81a542.data.unityweb";
+    var PART_COUNT = 15;
+    var PART_PREFIX = "Build/81b9b315f9a925fd39279df8af81a542.data.unityweb.part.";
 
     function fetchAllParts(baseUrl) {
       var origin = baseUrl.substring(0, baseUrl.lastIndexOf("Build/"));
@@ -306,11 +306,11 @@
   }
 
   var buildUrl = "Build";
-  var loaderUrl = buildUrl + "/WebGL.loader.js";
+  var loaderUrl = buildUrl + "/45d1cd8c7243f6a432b90f192dcbf0d4.js";
   var config = {
-    dataUrl: buildUrl + "/WebGL.data",
-    frameworkUrl: buildUrl + "/WebGL.framework.js",
-    codeUrl: buildUrl + "/WebGL.wasm",
+    dataUrl: buildUrl + "/81b9b315f9a925fd39279df8af81a542.data.unityweb",
+    frameworkUrl: buildUrl + "/7c7548a348dbf2e89fcab026fc82c25a.js.unityweb",
+    codeUrl: buildUrl + "/9959b2bb0fd6fb891d64b0d84cf68883.wasm.unityweb",
     streamingAssetsUrl: "StreamingAssets",
     companyName: "SteelRaven7",
     productName: "RavenfieldSteam",
@@ -360,7 +360,7 @@
   function onDownloadComplete() {
     downloadDone = true;
     rfStatus.textContent = "starting engine";
-    rfNote.textContent = "unpacking stuff";
+    rfNote.textContent = "unpacking stuff might take a second";
   }
 
   var script = document.createElement("script");
@@ -379,7 +379,7 @@
       setTimeout(function () {
         rfLoader.classList.add("hide");
         setTimeout(function () { rfLoader.remove(); }, 500);
-      }, 250);
+      }, 500);
     }).catch(function (message) {
       rfStatus.textContent = "failed to load";
       rfNote.textContent = String(message).slice(0, 200);
